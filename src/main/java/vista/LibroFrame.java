@@ -7,6 +7,7 @@ import modelo.Libro;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -23,11 +24,19 @@ public class LibroFrame extends JFrame {
     private JTextField editorial;
     private JSpinner stock;
     private JComboBox<Categoria> categoria;
+
     private JTable tabla;
     private DefaultTableModel modeloTabla;
 
     private List<Libro> datos = new ArrayList<>();
+
     private int idSeleccionado = -1;
+
+    /*
+     * Lo uso para evitar que el listener de selección se ejecute
+     * mientras estoy reconstruyendo la tabla.
+     */
+    private boolean actualizandoTabla = false;
 
     public LibroFrame(boolean soloLectura) {
         this.soloLectura = soloLectura;
@@ -37,6 +46,7 @@ public class LibroFrame extends JFrame {
                         ? "Biblioteca Escolar - Consulta de libros"
                         : "Biblioteca Escolar - Gestión de libros"
         );
+
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setSize(980, 590);
         setLocationRelativeTo(null);
@@ -47,36 +57,67 @@ public class LibroFrame extends JFrame {
     }
 
     private void inicializar() {
-        JPanel principal = new JPanel(new BorderLayout(10, 10));
-        principal.setBorder(new EmptyBorder(15, 15, 15, 15));
 
-        JPanel formulario = new JPanel(new GridLayout(3, 4, 8, 8));
+        JPanel principal = new JPanel(
+                new BorderLayout(10, 10)
+        );
+
+        principal.setBorder(
+                new EmptyBorder(15, 15, 15, 15)
+        );
+
+        JPanel formulario = new JPanel(
+                new GridLayout(3, 4, 8, 8)
+        );
 
         formulario.add(new JLabel("Título:"));
+
         titulo = new JTextField();
+
         formulario.add(titulo);
 
+
         formulario.add(new JLabel("Autor:"));
+
         autor = new JTextField();
+
         formulario.add(autor);
 
+
         formulario.add(new JLabel("ISBN:"));
+
         isbn = new JTextField();
+
         formulario.add(isbn);
 
+
         formulario.add(new JLabel("Editorial:"));
+
         editorial = new JTextField();
+
         formulario.add(editorial);
 
+
         formulario.add(new JLabel("Stock:"));
+
         stock = new JSpinner(
-                new SpinnerNumberModel(0, 0, 9999, 1)
+                new SpinnerNumberModel(
+                        0,
+                        0,
+                        9999,
+                        1
+                )
         );
+
         formulario.add(stock);
 
+
         formulario.add(new JLabel("Categoría:"));
+
         categoria = new JComboBox<>();
+
         formulario.add(categoria);
+
 
         modeloTabla = new DefaultTableModel(
                 new Object[]{
@@ -90,47 +131,93 @@ public class LibroFrame extends JFrame {
                 },
                 0
         ) {
+
             @Override
-            public boolean isCellEditable(int row, int column) {
+            public boolean isCellEditable(
+                    int row,
+                    int column
+            ) {
                 return false;
             }
         };
 
+
         tabla = new JTable(modeloTabla);
-        tabla.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
-        /*
-         * Permite ordenar las columnas haciendo clic en el encabezado.
-         * Por eso, cuando selecciono una fila, debo convertir el índice
-         * visible al índice real del modelo.
-         */
-        tabla.setAutoCreateRowSorter(true);
-
-        if (!soloLectura) {
-            tabla.getSelectionModel().addListSelectionListener(e -> {
-                if (!e.getValueIsAdjusting()) {
-                    cargarSeleccion();
-                }
-            });
-        }
-
-        JButton refrescar = new JButton("Refrescar");
-        refrescar.addActionListener(e -> refrescar());
-
-        JPanel acciones = new JPanel(
-                new FlowLayout(FlowLayout.CENTER)
+        tabla.setSelectionMode(
+                ListSelectionModel.SINGLE_SELECTION
         );
 
-        if (!soloLectura) {
-            JButton crear = new JButton("Crear");
-            JButton actualizar = new JButton("Actualizar");
-            JButton eliminar = new JButton("Eliminar");
-            JButton limpiar = new JButton("Limpiar");
+        /*
+         * Creo el sorter directamente para poder reemplazarlo
+         * de forma segura cuando se refresca la tabla.
+         */
+        tabla.setRowSorter(
+                new TableRowSorter<>(modeloTabla)
+        );
 
-            crear.addActionListener(e -> crear());
-            actualizar.addActionListener(e -> actualizar());
-            eliminar.addActionListener(e -> eliminar());
-            limpiar.addActionListener(e -> limpiar());
+
+        if (!soloLectura) {
+
+            tabla.getSelectionModel()
+                    .addListSelectionListener(e -> {
+
+                        if (!e.getValueIsAdjusting()
+                                && !actualizandoTabla) {
+
+                            cargarSeleccion();
+                        }
+                    });
+        }
+
+
+        JButton refrescar =
+                new JButton("Refrescar");
+
+        refrescar.addActionListener(
+                e -> refrescar()
+        );
+
+
+        JPanel acciones =
+                new JPanel(
+                        new FlowLayout(
+                                FlowLayout.CENTER
+                        )
+                );
+
+
+        if (!soloLectura) {
+
+            JButton crear =
+                    new JButton("Crear");
+
+            JButton actualizar =
+                    new JButton("Actualizar");
+
+            JButton eliminar =
+                    new JButton("Eliminar");
+
+            JButton limpiar =
+                    new JButton("Limpiar");
+
+
+            crear.addActionListener(
+                    e -> crear()
+            );
+
+            actualizar.addActionListener(
+                    e -> actualizar()
+            );
+
+            eliminar.addActionListener(
+                    e -> eliminar()
+            );
+
+            limpiar.addActionListener(
+                    e -> limpiar()
+            );
+
 
             acciones.add(crear);
             acciones.add(actualizar);
@@ -138,13 +225,16 @@ public class LibroFrame extends JFrame {
             acciones.add(limpiar);
         }
 
+
         acciones.add(refrescar);
 
+
         /*
-         * Si la ventana se abre para un estudiante,
-         * los controles quedan solo para consulta.
+         * El estudiante puede consultar libros,
+         * pero no modificar sus datos.
          */
         if (soloLectura) {
+
             titulo.setEnabled(false);
             autor.setEnabled(false);
             isbn.setEnabled(false);
@@ -153,22 +243,41 @@ public class LibroFrame extends JFrame {
             categoria.setEnabled(false);
         }
 
-        principal.add(formulario, BorderLayout.NORTH);
-        principal.add(new JScrollPane(tabla), BorderLayout.CENTER);
-        principal.add(acciones, BorderLayout.SOUTH);
+
+        principal.add(
+                formulario,
+                BorderLayout.NORTH
+        );
+
+        principal.add(
+                new JScrollPane(tabla),
+                BorderLayout.CENTER
+        );
+
+        principal.add(
+                acciones,
+                BorderLayout.SOUTH
+        );
+
 
         setContentPane(principal);
     }
 
+
     private void cargarCategorias() {
+
         categoria.removeAllItems();
 
         try {
-            for (Categoria item : controller.listarCategorias()) {
+
+            for (Categoria item
+                    : controller.listarCategorias()) {
+
                 categoria.addItem(item);
             }
 
         } catch (SQLException e) {
+
             UiUtils.error(
                     this,
                     "No se pudieron cargar las categorías.\n"
@@ -177,9 +286,12 @@ public class LibroFrame extends JFrame {
         }
     }
 
+
     private Libro formulario(int id) {
+
         Categoria seleccionada =
                 (Categoria) categoria.getSelectedItem();
+
 
         return new Libro(
                 id,
@@ -188,28 +300,42 @@ public class LibroFrame extends JFrame {
                 isbn.getText().trim(),
                 editorial.getText().trim(),
                 (Integer) stock.getValue(),
+
                 seleccionada == null
                         ? 0
                         : seleccionada.getId(),
+
                 seleccionada == null
                         ? ""
                         : seleccionada.getNombre()
         );
     }
 
+
     private void crear() {
+
         try {
-            controller.crear(formulario(0));
+
+            controller.crear(
+                    formulario(0)
+            );
+
 
             UiUtils.info(
                     this,
                     "Libro registrado correctamente."
             );
 
+
             limpiar();
             refrescar();
 
-        } catch (IllegalArgumentException | SQLException e) {
+
+        } catch (
+                IllegalArgumentException
+                | SQLException e
+        ) {
+
             UiUtils.error(
                     this,
                     e.getMessage()
@@ -217,29 +343,44 @@ public class LibroFrame extends JFrame {
         }
     }
 
+
     private void actualizar() {
+
         if (idSeleccionado < 0) {
+
             UiUtils.error(
                     this,
                     "Selecciona un libro."
             );
+
             return;
         }
 
+
         try {
+
             controller.actualizar(
-                    formulario(idSeleccionado)
+                    formulario(
+                            idSeleccionado
+                    )
             );
+
 
             UiUtils.info(
                     this,
                     "Libro actualizado correctamente."
             );
 
+
             limpiar();
             refrescar();
 
-        } catch (IllegalArgumentException | SQLException e) {
+
+        } catch (
+                IllegalArgumentException
+                | SQLException e
+        ) {
+
             UiUtils.error(
                     this,
                     e.getMessage()
@@ -247,39 +388,69 @@ public class LibroFrame extends JFrame {
         }
     }
 
+
     private void eliminar() {
+
         if (idSeleccionado < 0) {
+
             UiUtils.error(
                     this,
                     "Selecciona un libro."
             );
+
             return;
         }
+
 
         if (!UiUtils.confirmar(
                 this,
                 "¿Eliminar el libro seleccionado?"
         )) {
+
             return;
         }
 
+
         try {
-            controller.eliminar(idSeleccionado);
+
+            /*
+             * Guardo el ID antes de modificar la tabla.
+             */
+            int idEliminar =
+                    idSeleccionado;
+
+
+            /*
+             * Limpio primero la selección visual.
+             */
+            actualizandoTabla = true;
+
+            tabla.clearSelection();
+
+            idSeleccionado = -1;
+
+            actualizandoTabla = false;
+
+
+            controller.eliminar(
+                    idEliminar
+            );
+
 
             UiUtils.info(
                     this,
                     "Libro eliminado."
             );
 
-            /*
-             * Limpio la selección antes de recargar la tabla
-             * para evitar que el RowSorter intente trabajar
-             * con una fila que ya dejó de existir.
-             */
-            limpiar();
+
+            limpiarFormulario();
             refrescar();
 
+
         } catch (SQLException e) {
+
+            actualizandoTabla = false;
+
             UiUtils.error(
                     this,
                     "No se pudo eliminar. "
@@ -289,21 +460,41 @@ public class LibroFrame extends JFrame {
         }
     }
 
-    private void refrescar() {
-        /*
-         * Antes de vaciar el modelo limpio la selección.
-         * Esto evita warnings del RowSorter cuando se elimina
-         * o modifica una fila que estaba seleccionada.
-         */
-        tabla.clearSelection();
-        idSeleccionado = -1;
 
-        modeloTabla.setRowCount(0);
+    private void refrescar() {
+
+        /*
+         * Mientras se reconstruye el JTable no quiero
+         * procesar eventos de selección.
+         */
+        actualizandoTabla = true;
+
 
         try {
-            datos = controller.listar();
+
+            tabla.clearSelection();
+
+            idSeleccionado = -1;
+
+
+            /*
+             * Desconecto temporalmente el sorter.
+             *
+             * Así no intenta convertir índices mientras
+             * el número de filas está cambiando.
+             */
+            tabla.setRowSorter(null);
+
+
+            modeloTabla.setRowCount(0);
+
+
+            datos =
+                    controller.listar();
+
 
             for (Libro libro : datos) {
+
                 modeloTabla.addRow(
                         new Object[]{
                                 libro.getId(),
@@ -317,51 +508,84 @@ public class LibroFrame extends JFrame {
                 );
             }
 
+
+            /*
+             * Una vez terminada la carga creo un sorter
+             * nuevo sobre el modelo ya actualizado.
+             */
+            tabla.setRowSorter(
+                    new TableRowSorter<>(
+                            modeloTabla
+                    )
+            );
+
+
         } catch (SQLException e) {
+
             UiUtils.error(
                     this,
                     "No se pudieron cargar los libros.\n"
                             + e.getMessage()
             );
+
+
+        } finally {
+
+            actualizandoTabla = false;
         }
     }
 
+
     private void cargarSeleccion() {
-        int filaVista = tabla.getSelectedRow();
+
+        if (actualizandoTabla) {
+            return;
+        }
+
+
+        int filaVista =
+                tabla.getSelectedRow();
+
 
         if (filaVista < 0) {
             return;
         }
 
-        /*
-         * Cuando la tabla está ordenada, la fila visible puede
-         * ser distinta a la fila real del modelo.
-         * También valido que la fila todavía exista antes de
-         * convertirla para evitar errores del RowSorter.
-         */
-        if (tabla.getRowSorter() != null
-                && filaVista >= tabla.getRowSorter().getViewRowCount()) {
-            return;
-        }
 
         int filaModelo;
 
-        try {
-            filaModelo =
-                    tabla.convertRowIndexToModel(filaVista);
 
-        } catch (IndexOutOfBoundsException e) {
+        try {
+
+            filaModelo =
+                    tabla.convertRowIndexToModel(
+                            filaVista
+                    );
+
+
+        } catch (
+                IndexOutOfBoundsException
+                | IllegalArgumentException e
+        ) {
+
             return;
         }
+
 
         if (filaModelo < 0
                 || filaModelo >= datos.size()) {
+
             return;
         }
 
-        Libro libro = datos.get(filaModelo);
 
-        idSeleccionado = libro.getId();
+        Libro libro =
+                datos.get(filaModelo);
+
+
+        idSeleccionado =
+                libro.getId();
+
 
         titulo.setText(
                 libro.getTitulo()
@@ -383,42 +607,65 @@ public class LibroFrame extends JFrame {
                 libro.getStock()
         );
 
+
         seleccionarCategoria(
                 libro.getIdCategoria()
         );
     }
 
-    private void seleccionarCategoria(int idCategoria) {
-        for (int i = 0;
-             i < categoria.getItemCount();
-             i++) {
+
+    private void seleccionarCategoria(
+            int idCategoria
+    ) {
+
+        for (
+                int i = 0;
+                i < categoria.getItemCount();
+                i++
+        ) {
 
             Categoria item =
                     categoria.getItemAt(i);
 
-            if (item.getId() == idCategoria) {
+
+            if (item.getId()
+                    == idCategoria) {
+
                 categoria.setSelectedIndex(i);
+
                 return;
             }
         }
     }
 
+
     private void limpiar() {
+
+        actualizandoTabla = true;
+
+        tabla.clearSelection();
+
+        actualizandoTabla = false;
+
+
         idSeleccionado = -1;
 
-        /*
-         * Primero limpio la selección porque la tabla
-         * puede estar usando un RowSorter.
-         */
-        tabla.clearSelection();
+        limpiarFormulario();
+    }
+
+
+    private void limpiarFormulario() {
 
         titulo.setText("");
         autor.setText("");
         isbn.setText("");
         editorial.setText("");
+
         stock.setValue(0);
 
+
         if (categoria.getItemCount() > 0) {
+
             categoria.setSelectedIndex(0);
         }
     }
